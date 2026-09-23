@@ -50,7 +50,7 @@ class AudioSession:
 
         elif chunk.chunk_id > self.expected_chunk_id:
             gap = chunk.chunk_id - self.expected_chunk_id
-            if gap > MAX_CHUNK_ID_GAP:
+            if gap > settings.max_chunk_id_gap:
                 logger.warning(
                     f"Session {self.session_id}: Chunk ID {chunk.chunk_id} is "
                     f"{gap} ahead of expected {self.expected_chunk_id} (gap > {settings.max_chunk_id_gap}). "

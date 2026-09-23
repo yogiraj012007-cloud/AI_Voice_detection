@@ -1846,23 +1846,7 @@
 
                         this._modelState = 'ready';
 
-                        // Drain chunks that arrived while the model was loading.
-                        // IMPORTANT: route through _processingChain, not direct await.
-                        // Direct await here and chain in classifyChunk() are two separate
-                        // serialisation paths — they would race. By routing pending chunks
-                        // through the same chain, they are guaranteed to run sequentially
-                        // with any classifyChunk() calls that arrived after _modelState='ready'.
-                        if (this._pendingChunks.length > 0) {
-                            console.info(`TrueToneSileroVAD: Queuing ${this._pendingChunks.length} pre-load chunk(s) onto processing chain.`);
-                            const pending = this._pendingChunks;
-                            this._pendingChunks = [];
-                            for (const chunk of pending) {
-                                this._processingChain = this._processingChain
-                                    .then(() => this._processChunk(chunk))
-                                    .catch(() => {});
-                            }
-                        }
-
+                        // Pending chunks logic removed per user fix.
                     } catch (err) {
                         this._modelState = 'failed';
                         this._loadError = err.message || String(err);
@@ -1874,14 +1858,7 @@
                             detail: { state: 'failed', error: err.message || String(err) }
                         }));
 
-                        // Flush pending chunks through unfiltered (isSpeech=null)
-                        if (this._pendingChunks.length > 0) {
-                            const pending = this._pendingChunks;
-                            this._pendingChunks = [];
-                            for (const chunk of pending) {
-                                window.TrueToneChunkManager._queue.push(chunk);
-                            }
-                        }
+                        // Pending chunks logic removed per user fix.
                     }
                 },
 
@@ -1890,18 +1867,13 @@
                  * If model isn't ready yet, queues the chunk; otherwise processes immediately.
                  */
                 classifyChunk(chunkMeta) {
+                    if (this._modelState === 'idle') {
+                        this.loadModel();
+                    }
+
                     if (this._modelState === 'loading' || this._modelState === 'idle') {
-                        // Model still loading — queue chunk, don't drop it.
-                        // Cap the pending queue to avoid unbounded memory growth if the model
-                        // takes a very long time to load (network slow, WASM cold start).
-                        if (this._pendingChunks.length >= 50) {
-                            console.warn(
-                                `TrueToneSileroVAD: Pending queue full (50 chunks). ` +
-                                `Dropping oldest chunk while model loads.`
-                            );
-                            this._pendingChunks.shift();
-                        }
-                        this._pendingChunks.push(chunkMeta);
+                        chunkMeta.isSpeech = null; // VAD result is not ready
+                        window.TrueToneChunkManager._queue.push(chunkMeta);
                         return;
                     }
 
